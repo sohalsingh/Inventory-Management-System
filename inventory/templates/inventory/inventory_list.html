@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="mb-4">Inventory List</h2>
+    
+    <!-- ✅ Add Item Button -->
+    <a href="{% url 'add_item' %}" class="btn btn-success mb-3">+ Add Item</a>
+    
+    <!-- ✅ Inventory Table -->
+    <table class="table table-bordered table-striped">
+        <thead class="table-dark">
+            <tr>
+                <th>Name</th>
+                <th>Quantity</th>
+                <th>Price</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>{{ item.name }}</td>
+                <td>{{ item.quantity }}</td>
+                <td>${{ item.price }}</td>
+                <td>
+                    <a href="{% url 'update_item' item.id %}" class="btn btn-warning btn-sm">Edit</a>
+                    <a href="{% url 'delete_item' item.id %}" class="btn btn-danger btn-sm">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- ✅ Inventory Chart -->
+    <h3 class="mt-5">Inventory Stock Chart</h3>
+    <canvas id="inventoryChart"></canvas>
+
+</div>
+
+<!-- ✅ Load Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- ✅ Chart.js Script -->
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        var ctx = document.getElementById("inventoryChart").getContext("2d");
+
+        var labels = JSON.parse('{{ labels|escapejs }}');  // ✅ Fix JSON formatting
+        var data = JSON.parse('{{ data|escapejs }}');  // ✅ Ensure data is correctly formatted
+
+        var chart = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels: labels,  // ✅ Product names
+                datasets: [{
+                    label: "Stock Quantity",
+                    data: data,  // ✅ Stock levels
+                    backgroundColor: "rgba(54, 162, 235, 0.5)",  // ✅ Light blue bars
+                    borderColor: "rgba(54, 162, 235, 1)",
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}
