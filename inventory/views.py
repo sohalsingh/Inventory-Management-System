@@ -1,13 +1,49 @@
-import json
 from django.shortcuts import render, redirect, get_object_or_404
-from .models import Item
-from .forms import ItemForm
-from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth import login, logout, authenticate
-from django.http import HttpResponse  # ✅ For debugging
+from django.contrib import messages
+from django.http import HttpResponse
+from .models import Item
+from .forms import ItemForm, CSVUploadForm
+import json
+import csv
 
-# Signup View
+# ✅ Add Item View
+def add_item(request):
+    if request.method == "POST":
+        form = ItemForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('inventory_list')
+    else:
+        form = ItemForm()
+    return render(request, 'inventory/add_item.html', {'form': form})
+
+# ✅ Update Item View
+def update_item(request, pk):  # ✅ Ensure function uses "pk"
+    item = get_object_or_404(Item, id=pk)  # ✅ Ensure matching field name
+    
+    if request.method == "POST":
+        form = ItemForm(request.POST, instance=item)
+        if form.is_valid():
+            form.save()
+            return redirect('inventory_list')
+    else:
+        form = ItemForm(instance=item)
+
+    return render(request, 'inventory/update_item.html', {'form': form})
+
+
+# ✅ Correct Delete Item View
+def delete_item(request, pk):  # ✅ Change "item_id" to "pk"
+    item = get_object_or_404(Item, id=pk)  # ✅ Ensure matching field name
+    if request.method == "POST":
+        item.delete()
+        return redirect('inventory_list')
+    return render(request, 'inventory/delete_item.html', {'item': item})
+
+
+# ✅ Signup View
 def signup_view(request):
     if request.method == "POST":
         form = UserCreationForm(request.POST)
@@ -19,83 +55,75 @@ def signup_view(request):
         form = UserCreationForm()
     return render(request, 'inventory/signup.html', {'form': form})
 
-# Login View
+# ✅ Login View
 def login_view(request):
-    print("✅ login_view is being called")  # Debug message
-
     form = AuthenticationForm(request, data=request.POST)
-    
     if request.method == "POST":
-        print("✅ POST request detected")  # Debug message
         if form.is_valid():
-            print("✅ Form is valid")  # Debug message
             username = form.cleaned_data.get('username')
             password = form.cleaned_data.get('password')
             user = authenticate(request, username=username, password=password)
-
             if user is not None:
-                print("✅ User authenticated")  # Debug message
                 login(request, user)
                 return redirect('inventory_list')
-            else:
-                print("❌ User authentication failed")  # Debug message
-        else:
-            print("❌ Form is invalid")  # Debug message
 
-    print("✅ Rendering login.html")  # Debug message
     return render(request, 'inventory/login.html', {'form': form})
 
-# ✅ Fix: Add `logout_view`
+# ✅ Logout View
 def logout_view(request):
     logout(request)
-    return redirect('login')  # Redirect to login page after logout
+    return redirect('login')
 
-# Protect inventory list with login_required
-@login_required
+# ✅ Inventory List View
 def inventory_list(request):
     items = Item.objects.all()
-
-    # ✅ Convert QuerySet to lists for Chart.js
-    labels = list(items.values_list('name', flat=True))  
-    data = list(items.values_list('quantity', flat=True))  
-
-    # ✅ Debugging: Print values to check if they exist
-    print("Labels:", labels)  
-    print("Data:", data)  
+    
+    # ✅ Extract product names & quantities
+    labels = list(items.values_list('name', flat=True))
+    data = list(items.values_list('quantity', flat=True))
 
     return render(request, 'inventory/inventory_list.html', {
         'items': items,
-        'labels': json.dumps(labels),  # ✅ Convert to JSON for JavaScript
-        'data': json.dumps(data)
+        'labels': json.dumps(labels),  # ✅ Ensure JSON format
+        'data': json.dumps(data)       # ✅ Ensure JSON format
     })
-# Create New Item
-def add_item(request):
+
+# ✅ Import CSV File
+def import_csv(request):
     if request.method == "POST":
-        form = ItemForm(request.POST)
+        form = CSVUploadForm(request.POST, request.FILES)
         if form.is_valid():
-            form.save()
-            return redirect('inventory_list')
-    else:
-        form = ItemForm()
-    return render(request, 'inventory/add_item.html', {'form': form})
+            csv_file = request.FILES["csv_file"]
 
+            if not csv_file.name.endswith(".csv"):
+                messages.error(request, "Invalid file format. Please upload a CSV file.")
+                return redirect("inventory_list")
 
-# Update Item
-def update_item(request, pk):
-    item = get_object_or_404(Item, pk=pk)
-    if request.method == "POST":
-        form = ItemForm(request.POST, instance=item)
-        if form.is_valid():
-            form.save()
-            return redirect('inventory_list')
-    else:
-        form = ItemForm(instance=item)
-    return render(request, 'inventory/update_item.html', {'form': form})
+            try:
+                decoded_file = csv_file.read().decode("utf-8").splitlines()
+                reader = csv.reader(decoded_file)
+                next(reader)  # ✅ Skip header row
 
-# Delete Item
-def delete_item(request, pk):
-    item = get_object_or_404(Item, pk=pk)
-    if request.method == "POST":
-        item.delete()
-        return redirect('inventory_list')
-    return render(request, 'inventory/delete_item.html', {'item': item})
+                for row in reader:
+                    name, quantity, price = row
+                    Item.objects.create(name=name, quantity=int(quantity), price=float(price))
+
+                messages.success(request, "Inventory data imported successfully!")
+            except Exception as e:
+                messages.error(request, f"Error processing file: {e}")
+
+    return redirect("inventory_list")
+
+# ✅ Export Inventory Data as CSV
+def export_csv(request):
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="inventory_data.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(["Name", "Quantity", "Price"])  # ✅ CSV Header
+
+    items = Item.objects.all().values_list("name", "quantity", "price")
+    for item in items:
+        writer.writerow(item)
+
+    return response

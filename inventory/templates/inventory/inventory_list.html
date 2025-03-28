@@ -1,14 +1,24 @@
 {% extends "base.html" %}
-
 {% block content %}
 <div class="container mt-5">
     <h2 class="mb-4">Inventory List</h2>
-    
+
+    <!-- ✅ Import & Export Buttons -->
+    <div class="mb-3 d-flex gap-3">
+        <form method="post" enctype="multipart/form-data" action="{% url 'import_csv' %}">
+            {% csrf_token %}
+            <input type="file" name="csv_file" accept=".csv" required>
+            <button type="submit" class="btn btn-primary">📥 Import CSV</button>
+        </form>
+        
+        <a href="{% url 'export_csv' %}" class="btn btn-success">📤 Export CSV</a>
+    </div>
+
     <!-- ✅ Add Item Button -->
     <a href="{% url 'add_item' %}" class="btn btn-success mb-3">+ Add Item</a>
-    
+
     <!-- ✅ Inventory Table -->
-    <table class="table table-bordered table-striped">
+    <table class="table table-bordered table-striped mt-4">
         <thead class="table-dark">
             <tr>
                 <th>Name</th>
@@ -31,12 +41,11 @@
             {% endfor %}
         </tbody>
     </table>
-
-    <!-- ✅ Inventory Chart -->
-    <h3 class="mt-5">Inventory Stock Chart</h3>
-    <canvas id="inventoryChart"></canvas>
-
 </div>
+
+ <!-- ✅ Inventory Stock Chart -->
+ <h3 class="mt-5">Inventory Stock Chart</h3>
+ <canvas id="inventoryChart"></canvas>
 
 <!-- ✅ Load Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -46,17 +55,23 @@
     document.addEventListener("DOMContentLoaded", function () {
         var ctx = document.getElementById("inventoryChart").getContext("2d");
 
-        var labels = JSON.parse('{{ labels|escapejs }}');  // ✅ Fix JSON formatting
-        var data = JSON.parse('{{ data|escapejs }}');  // ✅ Ensure data is correctly formatted
+        // ✅ Ensure data is correctly formatted
+        var labels = JSON.parse('{{ labels|escapejs }}'); // Product names
+        var data = JSON.parse('{{ data|escapejs }}'); // Stock quantities
+
+        // ✅ Check if data exists
+        if (labels.length === 0 || data.length === 0) {
+            console.warn("No inventory data available for the chart.");
+        }
 
         var chart = new Chart(ctx, {
             type: "bar",
             data: {
-                labels: labels,  // ✅ Product names
+                labels: labels,
                 datasets: [{
                     label: "Stock Quantity",
-                    data: data,  // ✅ Stock levels
-                    backgroundColor: "rgba(54, 162, 235, 0.5)",  // ✅ Light blue bars
+                    data: data,
+                    backgroundColor: "rgba(54, 162, 235, 0.5)",
                     borderColor: "rgba(54, 162, 235, 1)",
                     borderWidth: 1
                 }]
@@ -70,4 +85,5 @@
         });
     });
 </script>
+
 {% endblock %}
