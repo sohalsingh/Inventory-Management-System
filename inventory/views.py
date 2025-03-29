@@ -3,10 +3,54 @@ from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth import login, logout, authenticate
 from django.contrib import messages
 from django.http import HttpResponse
-from .models import Item
-from .forms import ItemForm, CSVUploadForm
+from .models import Item, Order, OrderItem
+from .forms import ItemForm, CSVUploadForm, OrderForm, OrderItemForm
 import json
 import csv
+from io import BytesIO 
+from reportlab.lib.pagesizes import letter  # ✅ pdf size
+from reportlab.pdfgen import canvas  # ✅ PDF Library
+from decimal import Decimal  # ✅ Import Decimal
+from reportlab.lib import colors
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
+
+
+
+# ✅ Checkout Page
+def checkout(request):
+    if request.method == "POST":
+        order_form = OrderForm(request.POST)
+
+        if order_form.is_valid():
+            order = order_form.save()  # ✅ Save Order
+
+            # ✅ Process Multiple Items
+            items = request.POST.getlist("item")
+            quantities = request.POST.getlist("quantity")
+
+            for item_id, quantity in zip(items, quantities):
+                item = Item.objects.get(id=item_id)
+                quantity = int(quantity)
+
+                if item.quantity >= quantity:
+                    OrderItem.objects.create(order=order, item=item, quantity=quantity)
+                    item.quantity -= quantity  # ✅ Reduce stock
+                    item.save()
+                else:
+                    return HttpResponse("Not enough stock available!")
+
+            return redirect("invoice_pdf", order_id=order.id)
+
+    else:
+        order_form = OrderForm()
+        order_item_form = OrderItemForm()
+
+    return render(request, "inventory/checkout.html", {
+        "order_form": order_form,
+        "order_item_form": order_item_form
+    })
 
 # ✅ Add Item View
 def add_item(request):
@@ -120,10 +164,110 @@ def export_csv(request):
     response["Content-Disposition"] = 'attachment; filename="inventory_data.csv"'
 
     writer = csv.writer(response)
-    writer.writerow(["Name", "Quantity", "Price"])  # ✅ CSV Header
+    writer.writerow(["Name", "Quantity", "Price (₹)"])  # ✅ CSV Header
 
     items = Item.objects.all().values_list("name", "quantity", "price")
     for item in items:
         writer.writerow(item)
 
+    return response
+
+def checkout(request):
+    if request.method == "POST":
+        order_form = OrderForm(request.POST)
+
+        if order_form.is_valid():
+            order = order_form.save()  # ✅ Save Order
+
+            # ✅ Process Multiple Items with Different Quantities
+            selected_items = request.POST.getlist("items")
+
+            for item_id in selected_items:
+                quantity_key = f"quantity_{item_id}"
+                quantity = int(request.POST.get(quantity_key, 1))  # Default 1 if missing
+                item = Item.objects.get(id=item_id)
+
+                if item.quantity >= quantity:
+                    OrderItem.objects.create(order=order, item=item, quantity=quantity)
+                    item.quantity -= quantity  # ✅ Reduce stock
+                    item.save()
+                else:
+                    return HttpResponse("Not enough stock available!")
+
+            return redirect("invoice_pdf", order_id=order.id)
+
+    else:
+        order_form = OrderForm()
+        order_item_form = OrderItemForm()
+
+    return render(request, "inventory/checkout.html", {
+        "order_form": order_form,
+        "order_item_form": order_item_form
+    })
+
+def invoice_pdf(request, order_id):
+    order = Order.objects.get(id=order_id)
+    
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    
+    elements = []  # ✅ Store PDF elements
+
+    styles = getSampleStyleSheet()
+    
+    # ✅ Title
+    elements.append(Paragraph(f"Invoice for Order #{order.id}", styles["Title"]))
+    elements.append(Paragraph(f"Customer: {order.customer_name}", styles["Normal"]))
+    elements.append(Paragraph(f"Email: {order.customer_email}", styles["Normal"]))
+    elements.append(Paragraph(f"Phone: {order.customer_phone}", styles["Normal"]))
+    elements.append(Paragraph(f"Address: {order.customer_address}", styles["Normal"]))
+    
+    elements.append(Paragraph("<br/><br/>", styles["Normal"]))  # ✅ Space before table
+
+    # ✅ Table Data (Header Row)
+    data = [
+        ["Item Name", "Quantity", "Unit Price (INR)", "Total Price (INR)"]
+    ]
+
+    total_amount = Decimal("0.00")
+
+    # ✅ Adding Each Item to the Table
+    for order_item in order.items.all():
+        item_total = order_item.quantity * order_item.item.price
+        total_amount += Decimal(item_total)  # ✅ Ensure Decimal type
+        data.append([
+            order_item.item.name,
+            str(order_item.quantity),
+            f"{order_item.item.price:.2f}",
+            f"{item_total:.2f}",
+        ])
+
+    gst_rate = Decimal("0.18")
+    gst_amount = total_amount * gst_rate
+    grand_total = total_amount + gst_amount
+
+    # ✅ Add Totals to Table
+    data.append(["", "", "Subtotal:", f"{total_amount:.2f}"])
+    data.append(["", "", "GST (18%):", f"{gst_amount:.2f}"])
+    data.append(["", "", "Grand Total:", f"{grand_total:.2f}"])
+
+    # ✅ Create Table & Styling
+    table = Table(data, colWidths=[2.5 * inch, 1 * inch, 1.5 * inch, 1.5 * inch])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.grey),  # ✅ Header Row Grey
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),  # ✅ White Text
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),  # ✅ Center Align Text
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),  # ✅ Bold Header
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 12),  # ✅ Space Below Header
+        ("GRID", (0, 0), (-1, -1), 1, colors.black),  # ✅ Black Grid Lines
+        ("BACKGROUND", (0, 1), (-1, -1), colors.beige),  # ✅ Light Background
+    ]))
+
+    elements.append(table)  # ✅ Add Table to PDF
+
+    doc.build(elements)  # ✅ Build the PDF
+
+    buffer.seek(0)
+    response = HttpResponse(buffer, content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="invoice_{order.id}.pdf"'
     return response

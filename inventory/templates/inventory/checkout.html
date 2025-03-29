@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-5">
+    <h2 class="text-center">🛒 Checkout</h2>
+
+    <div class="card shadow-lg p-4">
+        <form method="post">
+            {% csrf_token %}
+
+            <h4 class="text-primary">👤 Customer Details</h4>
+            <div class="mb-3">
+                {{ order_form.customer_name.label_tag }}
+                {{ order_form.customer_name }}
+            </div>
+            <div class="mb-3">
+                {{ order_form.customer_email.label_tag }}
+                {{ order_form.customer_email }}
+            </div>
+            <div class="mb-3">
+                {{ order_form.customer_phone.label_tag }}
+                {{ order_form.customer_phone }}
+            </div>
+            <div class="mb-3">
+                {{ order_form.customer_address.label_tag }}
+                {{ order_form.customer_address }}
+            </div>
+
+            <h4 class="text-primary">📦 Order Items</h4>
+            <div class="mb-3">
+                {{ order_item_form.items.label_tag }}
+                {{ order_item_form.items }}
+            </div>
+            
+            <h4 class="text-primary">📌 Enter Quantity for Each Item</h4>
+            <div id="quantity-fields"></div>
+
+            <h4 class="text-primary">💳 Payment Method</h4>
+            <div class="mb-3">
+                {{ order_form.payment_type.label_tag }}
+                {{ order_form.payment_type }}
+            </div>
+
+            <button type="submit" class="btn btn-success w-100">✅ Place Order</button>
+        </form>
+    </div>
+</div>
+
+<!-- ✅ JavaScript to Show Quantity Fields for Each Selected Item -->
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        let itemCheckboxes = document.querySelectorAll("input[name='items']");
+        let quantityContainer = document.getElementById("quantity-fields");
+
+        function updateQuantities() {
+            quantityContainer.innerHTML = "";  // Clear previous inputs
+
+            itemCheckboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    let quantityInput = document.createElement("input");
+                    quantityInput.type = "number";
+                    quantityInput.name = "quantity_" + checkbox.value;  // Unique name
+                    quantityInput.min = 1;
+                    quantityInput.placeholder = "Enter quantity for " + checkbox.parentNode.textContent.trim();
+                    quantityInput.classList.add("form-control", "mb-2");
+
+                    quantityContainer.appendChild(quantityInput);
+                }
+            });
+        }
+
+        itemCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener("change", updateQuantities);
+        });
+
+        updateQuantities();  // Call once to initialize
+    });
+</script>
+{% endblock %}

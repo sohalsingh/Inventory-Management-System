@@ -14,6 +14,9 @@
         <a href="{% url 'export_csv' %}" class="btn btn-success">📤 Export CSV</a>
     </div>
 
+    <!-- ✅ Checkout Button -->
+    <a href="{% url 'checkout' %}" class="btn btn-primary mb-3">🛒 Checkout</a>
+
     <!-- ✅ Add Item Button -->
     <a href="{% url 'add_item' %}" class="btn btn-success mb-3">+ Add Item</a>
 
@@ -32,7 +35,7 @@
             <tr>
                 <td>{{ item.name }}</td>
                 <td>{{ item.quantity }}</td>
-                <td>${{ item.price }}</td>
+                <td>₹{{ item.price }}</td>
                 <td>
                     <a href="{% url 'update_item' item.id %}" class="btn btn-warning btn-sm">Edit</a>
                     <a href="{% url 'delete_item' item.id %}" class="btn btn-danger btn-sm">Delete</a>
