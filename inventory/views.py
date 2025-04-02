@@ -1,3 +1,11 @@
+import json
+import csv
+import qrcode
+import os
+from django.conf import settings
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from django.core.files.base import ContentFile
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth import login, logout, authenticate
@@ -5,8 +13,6 @@ from django.contrib import messages
 from django.http import HttpResponse
 from .models import Item, Order, OrderItem
 from .forms import ItemForm, CSVUploadForm, OrderForm, OrderItemForm
-import json
-import csv
 from io import BytesIO 
 from reportlab.lib.pagesizes import letter  # ✅ pdf size
 from reportlab.pdfgen import canvas  # ✅ PDF Library
@@ -17,6 +23,28 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 
 
+#qr code generation
+@csrf_exempt
+def generate_upi_qr(request):
+    """Generates a UPI QR code dynamically and returns the image URL."""
+    if request.method == "POST":
+        upi_id = "yourupi@upi"  # ✅ Change to your actual UPI ID
+        amount = "1.00"  # You can update this dynamically if needed
+        qr_data = f"upi://pay?pa={upi_id}&pn=Test Payment&am={amount}"
+        
+        qr = qrcode.make(qr_data)
+        
+        qr_dir = os.path.join(settings.MEDIA_ROOT, "qr_codes")
+        os.makedirs(qr_dir, exist_ok=True)  
+
+        qr_path = os.path.join(qr_dir, "upi_qr.png")
+        qr.save(qr_path)
+
+        qr_url = f"/media/qr_codes/upi_qr.png"  # ✅ Return image URL
+
+        return JsonResponse({"qr_url": qr_url})
+
+    return JsonResponse({"error": "Invalid request"}, status=400)
 
 # ✅ Checkout Page
 def checkout(request):
@@ -51,6 +79,7 @@ def checkout(request):
         "order_form": order_form,
         "order_item_form": order_item_form
     })
+
 
 # ✅ Add Item View
 def add_item(request):

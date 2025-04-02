@@ -40,20 +40,28 @@
                 {{ order_form.payment_type }}
             </div>
 
+            <!-- ✅ QR Code Section (Hidden Initially) -->
+            <div id="qr-container" class="text-center mt-3" style="display: none;">
+                <h5 class="text-success">📲 Scan to Pay via UPI</h5>
+                <img id="qr-code" src="" alt="UPI QR Code" class="img-fluid" style="max-width: 200px;">
+            </div>
+
             <button type="submit" class="btn btn-success w-100">✅ Place Order</button>
         </form>
     </div>
 </div>
 
-<!-- ✅ JavaScript to Show Quantity Fields for Each Selected Item -->
+<!-- ✅ JavaScript to Show Quantity Fields for Each Selected Item and Handle QR Code Rendering -->
 <script>
     document.addEventListener("DOMContentLoaded", function () {
         let itemCheckboxes = document.querySelectorAll("input[name='items']");
         let quantityContainer = document.getElementById("quantity-fields");
+        let paymentSelect = document.querySelector("select[name='payment_type']");
+        let qrContainer = document.getElementById("qr-container");
+        let qrImage = document.getElementById("qr-code");
 
         function updateQuantities() {
             quantityContainer.innerHTML = "";  // Clear previous inputs
-
             itemCheckboxes.forEach(checkbox => {
                 if (checkbox.checked) {
                     let quantityInput = document.createElement("input");
@@ -62,7 +70,6 @@
                     quantityInput.min = 1;
                     quantityInput.placeholder = "Enter quantity for " + checkbox.parentNode.textContent.trim();
                     quantityInput.classList.add("form-control", "mb-2");
-
                     quantityContainer.appendChild(quantityInput);
                 }
             });
@@ -73,6 +80,25 @@
         });
 
         updateQuantities();  // Call once to initialize
+
+        function fetchQRCode() {
+            if (paymentSelect.value === "UPI") {
+                qrContainer.style.display = "block";
+                fetch("/generate-qr/", { method: "POST" })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.qr_url) {
+                            qrImage.src = data.qr_url;
+                        }
+                    })
+                    .catch(error => console.error("Error fetching QR code:", error));
+            } else {
+                qrContainer.style.display = "none";
+            }
+        }
+
+        paymentSelect.addEventListener("change", fetchQRCode);
+        fetchQRCode();  // Call initially to handle pre-selected option
     });
 </script>
 {% endblock %}
